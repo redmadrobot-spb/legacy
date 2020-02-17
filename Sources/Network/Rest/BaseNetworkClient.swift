@@ -81,10 +81,16 @@ open class BaseNetworkClient: LightNetworkClient, FullNetworkClient, CodableNetw
                     case .success(let request):
                         let httpTask = http.data(request: request, serializer: responseSerializer) { response, object, data, error in
                             task.httpTask = nil
-
                             if case .status(let code, let error)? = error {
                                 if code == 401, let authCompletion = authCompletion {
-                                    authCompletion()
+                                    authorizer.refreshAuthorization() { result in
+                                        switch result {
+                                            case .success():
+                                                authCompletion()
+                                            case .failure(let error):
+                                                requestCompletion(.failure(.http(code: code, error: error, response: response, data: data)))
+                                        }
+                                    }
                                 } else {
                                     requestCompletion(.failure(.http(code: code, error: error, response: response, data: data)))
                                 }
