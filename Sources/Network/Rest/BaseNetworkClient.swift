@@ -83,7 +83,7 @@ open class BaseNetworkClient: LightNetworkClient, FullNetworkClient, CodableNetw
                             task.httpTask = nil
                             if case .status(let code, let error)? = error {
                                 if code == 401, let authCompletion = authCompletion {
-                                    authorizer.refreshAuthorization() { result in
+                                    authorizer.refresh() { result in
                                         switch result {
                                             case .success():
                                                 authCompletion()

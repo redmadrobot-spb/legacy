@@ -10,5 +10,5 @@ import Foundation
 
 public protocol RequestAuthorizer {
     func authorize(request: URLRequest, completion: @escaping (Result<URLRequest, Error>) -> Void)
-    func refreshAuthorization(completion: @escaping (Result<Void, Error>) -> Void)
+    func refresh(completion: @escaping (Result<Void, Error>) -> Void)
 }
