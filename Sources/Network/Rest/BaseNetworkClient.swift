@@ -216,7 +216,12 @@ open class BaseNetworkClient: LightNetworkClient, FullNetworkClient, CodableNetw
     }
 
     private class Task: NetworkTask {
-        var httpTask: HttpTask?
+        var httpTask: HttpTask? {
+            didSet {
+                upload.progress = httpTask?.uploadProgress
+                download.progress = httpTask?.downloadProgress
+            }
+        }
         var uploadProgress: HttpProgress { return upload }
         var downloadProgress: HttpProgress { return download }
 
