@@ -28,6 +28,8 @@ public protocol HttpTask {
 public protocol Http {
     @discardableResult
     func data(request: URLRequest, completion: @escaping HttpCompletion) -> HttpTask
+    @discardableResult
+    func upload(request: URLRequest, data: Data, completion: @escaping HttpCompletion) -> HttpTask
 }
 
 public enum HttpError: Error {

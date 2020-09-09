@@ -153,6 +153,45 @@ open class UrlSessionHttp: Http {
         return task
     }
 
+    open func upload(request: URLRequest, data: Data, completion: @escaping HttpCompletion) -> HttpTask {
+        let start = Date()
+        log(request, date: start)
+
+        let responseQueue = self.responseQueue
+
+        let cmpl: HttpCompletion = { response, data, error in
+            responseQueue.async {
+                completion(response, data, error)
+            }
+        }
+
+        let dataTask = session.uploadTask(with: request, from: data)
+        let task = Task(dataTask, startDate: start) { data, response, error in
+            let end = Date()
+            self.log(response, request, data, error as NSError?, duration: end.timeIntervalSince(start), date: end)
+
+            guard let response = response, let data = data else {
+                cmpl(nil, nil, error.map(self.processError))
+                return
+            }
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                cmpl(nil, data, .nonHttpResponse(response: response))
+                return
+            }
+
+            if httpResponse.statusCode >= 400 {
+                cmpl(httpResponse, data, .status(code: httpResponse.statusCode, error: error))
+            } else {
+                cmpl(httpResponse, data, error.map(self.processError))
+            }
+        }
+
+        delegateObject.add(task: task)
+
+        return task
+    }
+
     open func processError(_ error: Error) -> HttpError {
         let urlError = error as NSError
         guard urlError.domain == NSURLErrorDomain else { return HttpError.error(error) }
