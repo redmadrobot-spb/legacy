@@ -24,6 +24,13 @@ public protocol LightRestClient: RestClient, LightNetworkClient {
     ) -> NetworkTask
 
     @discardableResult
+    func uploadCreate<ResponseTransformer: LightTransformer>(
+        path: String, id: String?, data: Data, contentType: String, headers: [String: String],
+        responseTransformer: ResponseTransformer,
+        completion: @escaping (Result<ResponseTransformer.T, NetworkError>) -> Void
+    ) -> NetworkTask
+
+    @discardableResult
     func read<ResponseTransformer: LightTransformer>(
         path: String, id: String?, parameters: [String: String], headers: [String: String],
         responseTransformer: ResponseTransformer,
@@ -95,6 +102,25 @@ public extension LightRestClient {
             completion: completion
         )
     }
+
+    @discardableResult
+    func uploadCreate<ResponseTransformer: LightTransformer>(
+        path: String, id: String?, data: Data, contentType: String, headers: [String: String],
+        responseTransformer: ResponseTransformer,
+        completion: @escaping (Result<ResponseTransformer.T, NetworkError>) -> Void
+    ) -> NetworkTask {
+        return uploadRequest(
+            method: .post,
+            path: pathWithId(path: path, id: id),
+            parameters: [:],
+            data: data,
+            headers: headers,
+            requestSerializer: DataHttpSerializer(contentType: contentType),
+            responseSerializer: JsonModelLightTransformerHttpSerializer(transformer: responseTransformer),
+            completion: completion
+        )
+    }
+
 
     @discardableResult
     func read<ResponseTransformer: LightTransformer>(
