@@ -44,6 +44,14 @@ public protocol LightNetworkClient: NetworkClient {
         requestTransformer: RequestTransformer, responseTransformer: ResponseTransformer,
         completion: @escaping (Result<ResponseTransformer.T, NetworkError>) -> Void
     ) -> NetworkTask
+
+    @discardableResult
+    func uploadRequest<RequestSerializer: HttpSerializer, ResponseSerializer: HttpSerializer>(
+        method: HttpMethod, path: String,
+        parameters: [String: String], data: Data, headers: [String: String],
+        requestSerializer: RequestSerializer, responseSerializer: ResponseSerializer,
+        completion: @escaping (Result<ResponseSerializer.Value, NetworkError>) -> Void
+    ) -> NetworkTask
 }
 
 public protocol FullNetworkClient: NetworkClient {

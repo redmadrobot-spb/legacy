@@ -108,6 +108,26 @@ public extension Http {
         }
     }
 
+    @discardableResult
+    func upload<T: HttpSerializer>(
+        request: URLRequest, data: Data, serializer: T,
+        completion: @escaping (HTTPURLResponse?, T.Value?, Data?, HttpError?) -> Void
+    ) -> HttpTask {
+        return upload(request: request, data: data) { response, data, error in
+            if let error = error {
+                completion(response, nil, data, error)
+            } else {
+                let result = serializer.deserialize(data)
+                switch result {
+                    case .success(let value):
+                        completion(response, value, data, error)
+                    case .failure(let error):
+                        completion(response, nil, data, .serialization(error))
+                }
+            }
+        }
+    }
+
     func urlWithParameters(url: URL, parameters: [String: String]) -> URL {
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: true) else { return url }
 

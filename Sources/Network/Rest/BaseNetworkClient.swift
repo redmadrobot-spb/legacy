@@ -36,11 +36,11 @@ open class BaseNetworkClient: LightNetworkClient, FullNetworkClient, CodableNetw
     }
 
     @discardableResult
-    open func uploadRequest<RequestSerializer: HttpSerializer>(
-        method: HttpMethod, path: String, data: Data,
-        parameters: [String: String], headers: [String: String],
-        requestSerializer: RequestSerializer,
-        completion: @escaping (Result<Void, NetworkError>) -> Void
+    open func uploadRequest<RequestSerializer: HttpSerializer, ResponseSerializer: HttpSerializer>(
+        method: HttpMethod, path: String,
+        parameters: [String: String], data: Data, headers: [String: String],
+        requestSerializer: RequestSerializer, responseSerializer: ResponseSerializer,
+        completion: @escaping (Result<ResponseSerializer.Value, NetworkError>) -> Void
     ) -> NetworkTask {
         let task = Task()
 
@@ -50,7 +50,7 @@ open class BaseNetworkClient: LightNetworkClient, FullNetworkClient, CodableNetw
         let completionQueue = self.completionQueue
         let requestAuthorizer = self.requestAuthorizer
 
-        let requestCompletion = { (result: Result<Void, NetworkError>) in
+        let requestCompletion = { (result: Result<ResponseSerializer.Value, NetworkError>) in
             completionQueue.async {
                 completion(result)
             }
@@ -77,7 +77,7 @@ open class BaseNetworkClient: LightNetworkClient, FullNetworkClient, CodableNetw
             authorizer.authorize(request: request) { result in
                 switch result {
                     case .success(let request):
-                        let httpTask = http.upload(request: request, data: data) { response, data, error in
+                        let httpTask = http.upload(request: request, data: data, serializer: responseSerializer) { response, object, data, error in
                             task.httpTask = nil
                             if case .status(let code, let error)? = error {
                                 if code == 401, let authCompletion = authCompletion {
@@ -93,7 +93,7 @@ open class BaseNetworkClient: LightNetworkClient, FullNetworkClient, CodableNetw
                                     requestCompletion(.failure(.http(code: code, error: error, response: response, data: data)))
                                 }
                             } else {
-                                requestCompletion(Result((), .error(error: error, response: response, data: data)))
+                                requestCompletion(Result(object, .error(error: error, response: response, data: data)))
                             }
                         }
                         task.httpTask = httpTask
@@ -112,13 +112,13 @@ open class BaseNetworkClient: LightNetworkClient, FullNetworkClient, CodableNetw
                             authorizeAndRunRequest(requestAuthorizer, request, nil)
                         }
                     } else {
-                        let httpTask = http.upload(request: request, data: data) { response, data, error in
+                        let httpTask = http.upload(request: request, data: data, serializer: responseSerializer) { response, object, data, error in
                             task.httpTask = nil
 
                             if case .status(let code, let error)? = error {
                                 requestCompletion(.failure(.http(code: code, error: error, response: response, data: data)))
                             } else {
-                                requestCompletion(Result((), .error(error: error, response: response, data: data)))
+                                requestCompletion(Result(object, .error(error: error, response: response, data: data)))
                             }
                         }
                         task.httpTask = httpTask
