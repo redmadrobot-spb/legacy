@@ -36,6 +36,104 @@ open class BaseNetworkClient: LightNetworkClient, FullNetworkClient, CodableNetw
     }
 
     @discardableResult
+    open func uploadRequest<RequestSerializer: HttpSerializer>(
+        method: HttpMethod, path: String, data: Data,
+        parameters: [String: String], headers: [String: String],
+        requestSerializer: RequestSerializer,
+        completion: @escaping (Result<Void, NetworkError>) -> Void
+    ) -> NetworkTask {
+        let task = Task()
+
+        let http = self.http
+        let baseUrl = self.baseURL
+        let workQueue = self.workQueue
+        let completionQueue = self.completionQueue
+        let requestAuthorizer = self.requestAuthorizer
+
+        let requestCompletion = { (result: Result<Void, NetworkError>) in
+            completionQueue.async {
+                completion(result)
+            }
+        }
+
+        let pathUrl = URL(string: path)
+        let pathUrlIsFull = !(pathUrl?.scheme?.isEmpty ?? true)
+        guard let url = pathUrlIsFull ? pathUrl : baseUrl.appendingPathComponent(path) else {
+            requestCompletion(.failure(.badUrl))
+            return task
+        }
+
+        let createRequest = { (createCompletion: @escaping (Result<URLRequest, HttpError>) -> Void) -> Void in
+            workQueue.async {
+                let request = http.request(method: method, url: url, urlParameters: parameters, headers: headers, object: nil, serializer: requestSerializer
+                )
+                DispatchQueue.main.async {
+                    createCompletion(request)
+                }
+            }
+        }
+
+        let authorizeAndRunRequest = { (authorizer: RequestAuthorizer, request: URLRequest, authCompletion: (() -> Void)?) in
+            authorizer.authorize(request: request) { result in
+                switch result {
+                    case .success(let request):
+                        let httpTask = http.upload(request: request, data: data) { response, data, error in
+                            task.httpTask = nil
+                            if case .status(let code, let error)? = error {
+                                if code == 401, let authCompletion = authCompletion {
+                                    authorizer.refresh() { result in
+                                        switch result {
+                                            case .success():
+                                                authCompletion()
+                                            case .failure(let error):
+                                                requestCompletion(.failure(.http(code: code, error: error, response: response, data: data)))
+                                        }
+                                    }
+                                } else {
+                                    requestCompletion(.failure(.http(code: code, error: error, response: response, data: data)))
+                                }
+                            } else {
+                                requestCompletion(Result((), .error(error: error, response: response, data: data)))
+                            }
+                        }
+                        task.httpTask = httpTask
+                        httpTask.resume()
+                    case .failure(let error):
+                        requestCompletion(.failure(.auth(error: error)))
+                }
+            }
+        }
+
+        createRequest { result in
+            switch result {
+                case .success(let request):
+                    if let requestAuthorizer = requestAuthorizer {
+                        authorizeAndRunRequest(requestAuthorizer, request) {
+                            authorizeAndRunRequest(requestAuthorizer, request, nil)
+                        }
+                    } else {
+                        let httpTask = http.upload(request: request, data: data) { response, data, error in
+                            task.httpTask = nil
+
+                            if case .status(let code, let error)? = error {
+                                requestCompletion(.failure(.http(code: code, error: error, response: response, data: data)))
+                            } else {
+                                requestCompletion(Result((), .error(error: error, response: response, data: data)))
+                            }
+                        }
+                        task.httpTask = httpTask
+                        httpTask.resume()
+                    }
+                case .failure(let error):
+                    requestCompletion(.failure(.error(error: error, response: nil, data: nil)))
+            }
+        }
+
+        return task
+    }
+
+
+    @discardableResult
     open func request<RequestSerializer: HttpSerializer, ResponseSerializer: HttpSerializer>(
         method: HttpMethod, path: String,
         parameters: [String: String], object: RequestSerializer.Value?, headers: [String: String],
